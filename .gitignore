@@ -1,3 +1,5 @@
 /.venv
 /.idea
 /data_collection/config.ini
+/data_collection/bgg_ratings.csv
+/data_preprocessing/5-core_filtered_bgg.csv
