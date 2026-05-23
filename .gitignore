@@ -3,3 +3,7 @@
 /data_collection/config.ini
 /data_collection/bgg_ratings.csv
 /data_preprocessing/5-core_filtered_bgg.csv
+/data_collection/bgg_collections.csv
+/data_preprocessing/test.csv
+/data_preprocessing/train.csv
+/data_preprocessing/validation.csv
