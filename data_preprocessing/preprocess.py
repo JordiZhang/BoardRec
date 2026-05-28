@@ -2,8 +2,8 @@ import pandas as pd
 
 data = pd.read_csv('../data_collection/bgg_collections.csv')
 
-n_users_bef = len(data['username'].unique())
-n_games_bef = len(data['name'].unique())
+n_users_bef = data['username'].nunique()
+n_games_bef = data['name'].nunique()
 
 # filter out collectors and retailers
 user_collection_size = data.groupby('username').size().sort_values(ascending=False)
@@ -31,8 +31,8 @@ while True:
     data = data[data['username'].isin(user_collection_size.index)].copy()
 
 
-n_users_aft = len(data['username'].unique())
-n_games_aft = len(data['name'].unique())
+n_users_aft = data['username'].nunique()
+n_games_aft = data['name'].nunique()
 
 print(f'Before Filtering: {n_users_bef} Users, {n_games_bef} Games')
 print(f'After Filtering: {n_users_aft} Users, {n_games_aft} Games')

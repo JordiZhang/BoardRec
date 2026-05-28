@@ -7,3 +7,6 @@
 /data_preprocessing/test.csv
 /data_preprocessing/train.csv
 /data_preprocessing/validation.csv
+/utils/game2idx.pkl
+/utils/user2idx.pkl
+/utils/user_items.pkl
