@@ -1,23 +1,26 @@
 import random
 from torch.utils.data import Dataset
 import torch
-import pandas as pd
+import numpy as np
 
 
 class BGGDatasetTriplets(Dataset):
-    def __init__(self, path, user_items):
-        collections = pd.read_csv(path)
-        self.n_users = collections['username'].nunique()
-        self.n_games = collections['name'].nunique()
+    def __init__(self, collections, n_users, n_games, user_items):
+        self.n_users = n_users
+        self.n_games = n_games
         self.interactions = torch.tensor(collections.values, dtype=torch.long)
         self.user_items = user_items
+        user_items = [x for val in user_items.values() for x in list(val)]
+        self.games, self.weights= np.unique(user_items, return_counts=True)
+        self.weights = self.weights**0.75
+        self.weights /= self.weights.sum()
 
     def __len__(self):
         return len(self.interactions)
 
-    def sample_negative(self, user, n_games):
+    def sample_negative(self, user):
         while True:
-            game = random.randint(0, n_games - 1)
+            game = int(np.random.choice(self.games, p=self.weights))
             if game not in self.user_items[user]:
                 return game
 
@@ -25,43 +28,56 @@ class BGGDatasetTriplets(Dataset):
         user, game = self.interactions[idx]
         user = user.item()
         game = game.item()
-        negative = self.sample_negative(user, self.n_games)
+        negative = self.sample_negative(user)
         return user, game, negative
 
 
-class BGGDatasetEval(Dataset):
-    def __init__(self, path, tot_games, neg_samples, user_items):
-        collections = pd.read_csv(path)
+class BGGDatasetTripletsEval(Dataset):
+    def __init__(self, collections, n_games, neg_samples, user_items):
         self.interactions = torch.tensor(collections.values, dtype=torch.long)
-        self.tot_games = tot_games
+        self.n_games = n_games
         self.neg_samples = neg_samples
         self.user_items = user_items
+        user_items = [x for val in user_items.values() for x in list(val)]
+        self.games, self.weights = np.unique(user_items, return_counts=True)
+        self.weights = self.weights ** 0.75
+        self.weights /= self.weights.sum()
 
         self.samples = []
 
         for user, pos_game in self.interactions:
             user = user.item()
             pos_game = pos_game.item()
-            negatives = set()
-            while len(negatives) < self.neg_samples:
-                neg = self.sample_negative(user, self.tot_games)
+            negatives = self.sample_negatives(user)
 
-                if neg in negatives:
-                    continue
-                negatives.add(neg)
-
-            items = torch.tensor([pos_game] + list(negatives), dtype=torch.long)
+            items = torch.tensor([pos_game] + negatives, dtype=torch.long)
             users = torch.full((len(items),), user, dtype=torch.long)
             self.samples.append((users, items))
 
     def __len__(self):
         return len(self.interactions)
 
-    def sample_negative(self, user, n_games):
-        while True:
-            game = random.randint(0, n_games - 1)
-            if game not in self.user_items[user]:
-                return game
+    def sample_negatives(self, user):
+        user_games = self.user_items[user]
+
+        negatives = set()
+
+        while len(negatives) < self.neg_samples:
+
+            candidates = np.random.choice(
+                self.games,
+                size=self.neg_samples * 2,
+                p=self.weights
+            )
+
+            for game in candidates:
+                if game not in user_games:
+                    negatives.add(int(game))
+
+                    if len(negatives) == self.neg_samples:
+                        break
+
+        return list(negatives)
 
     def __getitem__(self, idx):
         return self.samples[idx]

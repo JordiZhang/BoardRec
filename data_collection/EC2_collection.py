@@ -10,7 +10,7 @@ import configparser
 
 # load db credentials and auth token for bgg api
 config = configparser.ConfigParser()
-config.read('config.ini')
+config.read('../utils/config.ini')
 db = config['postgresql']
 api = config['api']
 

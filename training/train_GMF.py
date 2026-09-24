@@ -1,30 +1,31 @@
 import numpy as np
-from utils.datasets import BGGDatasetTriplets, BGGDatasetEval
+from utils.datasets import BGGDatasetTriplets, BGGDatasetTripletsEval
 from model_classes.GMF import GMF
 from torch.utils.data import DataLoader
 import torch.nn as nn
 import torch
 from tqdm import tqdm
 import pickle
+import pandas as pd
+import matplotlib.pyplot as plt
 
 
 device = torch.accelerator.current_accelerator().type if torch.accelerator.is_available() else "cpu"
 print(f"Using {device} device")
 
-neg_samples = 499
+neg_samples = 99
 
-with open('../utils/user_item.pkl', 'rb') as f:
+with open('../utils/user_items.pkl', 'rb') as f:
     user_items = pickle.load(f)
 
-train = BGGDatasetTriplets('../data_preprocessing/train.csv', user_items)
+data = pd.read_csv('../data_preprocessing/train.csv')
+train = BGGDatasetTriplets(data, data['username'].nunique(), data['name'].nunique(), user_items)
 train_loader = DataLoader(train, batch_size=4096, shuffle=True)
-test = BGGDatasetEval('../data_preprocessing/test.csv', train.n_games,
-                      neg_samples, user_items)
-test_loader = DataLoader(test, batch_size=1, shuffle=False)
-valid = BGGDatasetEval('../data_preprocessing/validation.csv', train.n_games,
-                       neg_samples, user_items)
+print('Train Data Loaded')
+valid = BGGDatasetTripletsEval(pd.read_csv('../data_preprocessing/validation.csv'), train.n_games,
+                               neg_samples, user_items)
 valid_loader = DataLoader(valid, batch_size=1, shuffle=False)
-print('Data loaded')
+print('Validation Data loaded')
 
 model = GMF(train.n_users, train.n_games, 10).to(device)
 print(model)
@@ -32,12 +33,13 @@ print(model)
 # BPR loss
 criterion = nn.LogSigmoid()
 
-optimizer = torch.optim.Adam(model.parameters())
+optimizer = torch.optim.Adam(model.parameters(), lr=0.001, weight_decay=0.001)
 
-n_epochs = 10
+n_epochs = 25
 
 best_hit10 = [0]
 best_auc = [0]
+losses = []
 for epoch in range(n_epochs):
     model.train()
     total_loss = 0
@@ -62,6 +64,7 @@ for epoch in range(n_epochs):
 
         total_loss += loss.item()
         loop.set_postfix(loss=loss.item())
+    losses.append(total_loss/len(train_loader))
 
     # validation
     model.eval()
@@ -90,13 +93,30 @@ for epoch in range(n_epochs):
 
         if best_hit10[-1] < hit10:
             best_hit10.append(hit10)
-            torch.save(model.state_dict(), '../trained_models/GMF_best_hit10.pth')
+            torch.save({
+                'epoch': epoch+1,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'hit10': best_hit10,
+            }, '../trained_models/GMF_best_hit10.pth')
 
         if best_auc[-1] < auc_track:
             best_auc.append(auc_track)
-            torch.save(model.state_dict(), '../trained_models/GMF_best_auc.pth')
+            torch.save({
+                'epoch': epoch+1,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'auc': best_auc,
+            }, '../trained_models/GMF_best_auc.pth')
 
+# save a last model after last epoch
+torch.save({
+                'epoch': n_epochs,
+                'model_state_dict': model.state_dict(),
+                'optimizer_state_dict': optimizer.state_dict(),
+                'losses': losses,
+            }, '../trained_models/GMF_last_epoch.pth')
 
-
-
-
+plt.plot(losses)
+plt.savefig('GMF.png')
+plt.show()
